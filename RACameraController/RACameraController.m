@@ -31,7 +31,9 @@
 
 #import "RACameraController.h"
 
+//--------------------------------------------------------------------------------------------------------------
 #pragma mark - UIImagePickerController RAExtension -
+//--------------------------------------------------------------------------------------------------------------
 
 @implementation UIImagePickerController (RAExtension)
 - (BOOL)prefersStatusBarHidden
@@ -44,26 +46,34 @@
 }
 @end
 
+//--------------------------------------------------------------------------------------------------------------
 #pragma mark - RACameraOverlayView Subclasses -
+//--------------------------------------------------------------------------------------------------------------
 
 @interface RACameraOverlayView7 : RACameraOverlayView
 @end
 
+//--------------------------------------------------------------------------------------------------------------
 #pragma mark - RACameraController -
+//--------------------------------------------------------------------------------------------------------------
 
 @interface RACameraController ()
-
+@property (nonatomic, strong) UIImagePickerController *imagePickerController;
+@property (nonatomic, weak) UIViewController *rootViewController;
 @end
 
 @implementation RACameraController
 
-- (id)init
+- (instancetype)initWithRootViewController:(UIViewController *)rootViewController
 {
     self = [super init];
-    if (self) {
-		if ([UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera])
-		{
-			_imagePickerController = [[UIImagePickerController alloc] init];
+    if (self)
+	{
+		self.rootViewController = rootViewController;
+		_isCameraAvailable = [UIImagePickerController isSourceTypeAvailable:UIImagePickerControllerSourceTypeCamera];
+		if (_isCameraAvailable)
+		{			
+			self.imagePickerController = [[UIImagePickerController alloc] init];
 			[_imagePickerController setSourceType:UIImagePickerControllerSourceTypeCamera];
 			[_imagePickerController setCameraCaptureMode:UIImagePickerControllerCameraCaptureModePhoto];
 			
@@ -98,7 +108,7 @@
 	}
 	else
 	{
-		[_imagePickerController.presentingViewController dismissViewControllerAnimated:NO completion:NULL];
+		[self dismissCameraAnimated:NO completion:NULL];
 	}
 }
 - (void)setCameraDevice:(UIImagePickerControllerCameraDevice)cameraDevice
@@ -124,11 +134,38 @@
 	}
 }
 
+- (void)presentCameraAnimated:(BOOL)animated completion:(void (^)(void))completion
+{
+	[_rootViewController presentViewController:_imagePickerController animated:animated completion:completion];
+}
+
+- (void)dismissCameraAnimated:(BOOL)animated completion:(void (^)(void))completion
+{
+	if ([_imagePickerController isEqual:_rootViewController.presentedViewController])
+	{
+		[_rootViewController dismissViewControllerAnimated:animated completion:completion];
+	}
+	else
+	{
+		NSLog(@"WARNING RACameraController : UIImagePickerController is not presented.");
+	}
+}
+
+- (void)setImagePickerControllerDelegate:(id<UIImagePickerControllerDelegate,UINavigationControllerDelegate>)delegate
+{
+	[_imagePickerController setDelegate:delegate];
+}
+
 @end
 
+//--------------------------------------------------------------------------------------------------------------
 #pragma mark - RACameraOverlayView -
+//--------------------------------------------------------------------------------------------------------------
 
 @implementation RACameraOverlayView
+{
+	UIInterfaceOrientation _interfaceOrientation;
+}
 
 - (instancetype)initWithCameraController:(RACameraController *)controller
 {
@@ -139,15 +176,57 @@
 		_cameraController = controller;
 		[self setTintColor:[UIColor whiteColor]];
         [self setup];
+				
+		[[NSNotificationCenter defaultCenter] addObserver:self
+												 selector:@selector(deviceDidRotate:)
+													 name:UIDeviceOrientationDidChangeNotification
+												   object:nil];
     }
     return self;
 }
 
+- (void)dealloc
+{
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
 - (void)setup{}
+
+- (void)deviceDidRotate:(NSNotification *)notification
+{
+	UIDeviceOrientation deviceOrientation = [[UIDevice currentDevice] orientation];
+	UIInterfaceOrientation interfaceOrientation = _interfaceOrientation;
+	switch (deviceOrientation)
+	{
+		case UIDeviceOrientationPortrait:
+			interfaceOrientation = UIInterfaceOrientationPortrait;
+			break;
+		case UIDeviceOrientationPortraitUpsideDown:
+			interfaceOrientation = UIInterfaceOrientationPortraitUpsideDown;
+			break;
+		case UIDeviceOrientationLandscapeLeft:
+			interfaceOrientation = UIInterfaceOrientationLandscapeLeft;
+			break;
+		case UIDeviceOrientationLandscapeRight:
+			interfaceOrientation = UIInterfaceOrientationLandscapeRight;
+			break;
+		default:
+			break;
+	}
+	if (interfaceOrientation != _interfaceOrientation)
+	{
+		_interfaceOrientation = interfaceOrientation;
+		[self interfaceDidChangeOrientation:_interfaceOrientation];
+	}
+}
+
+- (void)interfaceDidChangeOrientation:(UIInterfaceOrientation)orientation{}
 
 @end
 
+//--------------------------------------------------------------------------------------------------------------
 #pragma mark - RACameraOverlayView7
+//--------------------------------------------------------------------------------------------------------------
 
 @implementation RACameraOverlayView7
 {
@@ -221,9 +300,44 @@
 	}];
 }
 
+- (void)interfaceDidChangeOrientation:(UIInterfaceOrientation)orientation
+{
+	double angle;
+	switch (orientation)
+	{
+		case UIInterfaceOrientationPortrait:
+			angle = 0.0;
+			break;
+		case UIInterfaceOrientationPortraitUpsideDown:
+			angle = M_PI;
+			break;
+		case UIInterfaceOrientationLandscapeLeft:
+			angle = 0.5*M_PI;
+			break;
+		case UIInterfaceOrientationLandscapeRight:
+			angle = 1.5*M_PI;
+			break;
+	}
+	[UIView animateWithDuration:0.2 animations:^{
+		[_switchButton setTransform:CGAffineTransformMakeRotation(angle)];
+	}];
+	[UIView animateWithDuration:0.1
+					 animations:^{
+						 [_flashView setAlpha:0.0];
+					 }
+					 completion:^(BOOL finished) {
+						 [_flashView setOrientation:orientation];
+						 [UIView animateWithDuration:1.0 animations:^{
+							 [_flashView setAlpha:1.0];
+						 }];
+					 }];
+}
+
 @end
 
+//--------------------------------------------------------------------------------------------------------------
 #pragma mark - RAFlashView -
+//--------------------------------------------------------------------------------------------------------------
 
 typedef enum
 {
@@ -260,6 +374,7 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 {
 	UIImageView *_flashImage;
 	UILabel *_modeLabel[RAFlashModes];
+	CGAffineTransform _orientationTransform[RAFlashModes+1];
 	
 	RAFlashMode _flashMode;
 	RAFlashMode _hlFlashMode;
@@ -268,11 +383,13 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 	BOOL _expanded;
 	
 	NSTimer *_collapseTimer;
+	
+	UIInterfaceOrientation _orientation;
 }
 
 - (instancetype)initWithCameraOverlayView:(RACameraOverlayView *)cameraOverlayView
 {
-	CGRect frame = CGRectMake(0.0, 0.0, 80.0, 60.0);
+	CGRect frame = CGRectMake(0.0, 0.0, 80.0, 44.0);
     self = [super initWithFrame:frame];
     if (self)
 	{
@@ -289,6 +406,11 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 		[self addSubview:_modeLabel[RAFlashModeOn]];
 		_modeLabel[RAFlashModeAuto] = [self modeLabelWithText:@"A u t o"];
 		[self addSubview:_modeLabel[RAFlashModeAuto]];
+		
+		_orientationTransform[RAFlashModeAuto] = CGAffineTransformIdentity;
+		_orientationTransform[RAFlashModeOn] = CGAffineTransformIdentity;
+		_orientationTransform[RAFlashModeOff] = CGAffineTransformIdentity;
+		_orientationTransform[RAFlashModes] = CGAffineTransformIdentity;
 	}
     return self;
 }
@@ -309,6 +431,38 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 {
 	[super setFrame:frame];
 	_hitFrame = RAResizedFrameWithFactor(frame, 2.0);
+}
+
+- (void)setOrientation:(UIInterfaceOrientation)orientation
+{
+	_orientation = orientation;
+
+	double angle;
+	switch (_orientation)
+	{
+		case UIInterfaceOrientationPortrait:
+			angle = 0.0;
+			break;
+		case UIInterfaceOrientationPortraitUpsideDown:
+			angle = M_PI;
+			break;
+		case UIInterfaceOrientationLandscapeLeft:
+			angle = 0.5*M_PI;
+			break;
+		case UIInterfaceOrientationLandscapeRight:
+			angle = 1.5*M_PI;
+			break;
+	}
+	
+	_orientationTransform[RAFlashModeAuto] = CGAffineTransformMakeRotation(angle);
+	_orientationTransform[RAFlashModeOn] = CGAffineTransformMakeRotation(angle);
+	_orientationTransform[RAFlashModeOff] = CGAffineTransformMakeRotation(angle);
+	_orientationTransform[RAFlashModes] = CGAffineTransformMakeRotation(angle);
+	
+	[_modeLabel[RAFlashModeAuto] setTransform:_orientationTransform[RAFlashModeAuto]];
+	[_modeLabel[RAFlashModeOn] setTransform:_orientationTransform[RAFlashModeOn]];
+	[_modeLabel[RAFlashModeOff] setTransform:_orientationTransform[RAFlashModeOff]];
+	[_flashImage setTransform:_orientationTransform[RAFlashModes]];
 }
 
 - (void)setHighlighted:(BOOL)highlighted
@@ -436,14 +590,20 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 - (void)expand
 {
 	_expanded = YES;
-	[self setFrame:CGRectMake(0.0, 0.0, 160.0, 60.0)];
+	[self setFrame:CGRectMake(0.0, 0.0, 160.0, 44.0)];
+	
+	CGAffineTransform tFlashModeOn = CGAffineTransformMakeTranslation(60.0, 0.0);
+	tFlashModeOn = CGAffineTransformConcat(_orientationTransform[RAFlashModeOn],tFlashModeOn);
+	CGAffineTransform tFlashModeOff = CGAffineTransformMakeTranslation(105.0, 0.0);
+	tFlashModeOff = CGAffineTransformConcat(_orientationTransform[RAFlashModeOff],tFlashModeOff);
+	
 	[UIView animateWithDuration:0.2
 					 animations:^{
 						 [_modeLabel[RAFlashModeAuto] setAlpha:1.0];
 						 [_modeLabel[RAFlashModeOn] setAlpha:1.0];
 						 [_modeLabel[RAFlashModeOff] setAlpha:1.0];
-						 [_modeLabel[RAFlashModeOn] setTransform:CGAffineTransformMakeTranslation(60.0, 0.0)];
-						 [_modeLabel[RAFlashModeOff] setTransform:CGAffineTransformMakeTranslation(105.0, 0.0)];
+						 [_modeLabel[RAFlashModeOn] setTransform:tFlashModeOn];
+						 [_modeLabel[RAFlashModeOff] setTransform:tFlashModeOff];
 					 }];
 }
 
@@ -455,15 +615,15 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 - (void)collapseWithFlashMode:(RAFlashMode)flashMode
 {
 	_expanded = NO;
-	[self setFrame:CGRectMake(0.0, 0.0, 80.0, 60.0)];
+	[self setFrame:CGRectMake(0.0, 0.0, 80.0, 44.0)];
 
 	[UIView animateWithDuration:0.2 animations:^{
 		for (RAFlashMode fm = 0; fm < RAFlashModes; fm++)
 		{
 			[_modeLabel[fm] setAlpha:(fm == flashMode?1.0:0.0)];
 		}
-		[_modeLabel[RAFlashModeOn] setTransform:CGAffineTransformIdentity];
-		[_modeLabel[RAFlashModeOff] setTransform:CGAffineTransformIdentity];
+		[_modeLabel[RAFlashModeOn] setTransform:_orientationTransform[RAFlashModeOn]];
+		[_modeLabel[RAFlashModeOff] setTransform:_orientationTransform[RAFlashModeOff]];
 	}];
 }
 

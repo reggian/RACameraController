@@ -33,12 +33,18 @@
 
 @interface RACameraController : NSObject
 
-@property (nonatomic, strong, readonly) UIImagePickerController *imagePickerController;
+- (instancetype)initWithRootViewController:(UIViewController *)rootViewController;
+
+@property (nonatomic, readonly) BOOL isCameraAvailable;
 
 - (void)takePicture;
 - (void)dismissCamera;
 - (void)setCameraDevice:(UIImagePickerControllerCameraDevice)cameraDevice;
 - (void)setCameraFlashMode:(UIImagePickerControllerCameraFlashMode)cameraFlashMode;
+
+- (void)presentCameraAnimated:(BOOL)animated completion:(void (^)(void))completion;
+- (void)dismissCameraAnimated:(BOOL)animated completion:(void (^)(void))completion;
+- (void)setImagePickerControllerDelegate:(id<UIImagePickerControllerDelegate,UINavigationControllerDelegate>)delegate;
 
 @end
 
@@ -56,5 +62,7 @@
 @property (nonatomic, weak, readonly) RACameraOverlayView *cameraOverlayView;
 
 - (instancetype)initWithCameraOverlayView:(RACameraOverlayView *)cameraOverlayView;
+
+- (void)setOrientation:(UIInterfaceOrientation)orientation;
 
 @end

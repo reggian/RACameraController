@@ -22,10 +22,10 @@
     [super viewDidLoad];
 	// Do any additional setup after loading the view, typically from a nib.
 	
-	self.cameraController = [[RACameraController alloc] init];
-	if (_cameraController.imagePickerController)
+	self.cameraController = [[RACameraController alloc] initWithRootViewController:self];
+	if ([_cameraController isCameraAvailable])
 	{
-		[_cameraController.imagePickerController setDelegate:self];
+		[_cameraController setImagePickerControllerDelegate:self];
 	}
 	else
 	{
@@ -41,21 +41,21 @@
 
 - (IBAction)buttonPressed:(id)sender
 {
-	[self presentViewController:_cameraController.imagePickerController animated:YES completion:NULL];
+	[_cameraController presentCameraAnimated:YES completion:NULL];
 }
 
 #pragma mark - UIImagePickerDelegate Methods
 
 - (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker
 {
-	[self dismissViewControllerAnimated:YES completion:NULL];
+	[_cameraController dismissCameraAnimated:YES completion:NULL];
 }
 
 - (void)imagePickerController:(UIImagePickerController *)picker didFinishPickingMediaWithInfo:(NSDictionary *)info
 {	
 	UIImage *image = [info objectForKey:UIImagePickerControllerOriginalImage];
 	
-	[self dismissViewControllerAnimated:YES completion:NULL];
+	[_cameraController dismissCameraAnimated:YES completion:NULL];
 	
 	[_imageView setImage:image];
 }
