@@ -1,7 +1,7 @@
 //
 //  RACameraController.m
 //
-//  Version 0.2, October 9th, 2013
+//  Version 0.3, October 10th, 2013
 //
 //  Created by Andreas de Reggi on 07. 10. 2013.
 //  Copyright (c) 2013 Nollie Apps.
@@ -33,7 +33,16 @@
 
 // Macro thanks to yasirmturk
 // http://stackoverflow.com/a/5337804
-#define SYSTEM_VERSION_LESS_THAN(v)	([[[UIDevice currentDevice] systemVersion] compare:v options:NSNumericSearch] == NSOrderedAscending)
+#define SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(v)  ([[[UIDevice currentDevice] systemVersion] compare:v options:NSNumericSearch] != NSOrderedAscending)
+
+@implementation UIImage (RAExtension)
+
++ (UIImage *)RAImageNamed:(NSString *)name
+{
+	return [UIImage imageNamed:[NSString stringWithFormat:@"RACameraController.bundle/%@",name]];
+}
+
+@end
 
 //--------------------------------------------------------------------------------------------------------------
 #pragma mark - UIImagePickerController RAExtension -
@@ -98,13 +107,13 @@
 {
 	RACameraOverlayView *cameraOverlayView;
 	
-	if (SYSTEM_VERSION_LESS_THAN(@"7.0"))
+	if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"7.0"))
 	{
 		cameraOverlayView = [[RACameraOverlayView6 alloc] initWithCameraController:self];
 	}
 	else
 	{
-		cameraOverlayView = [[RACameraOverlayView7 alloc] initWithCameraController:self];
+		cameraOverlayView = [[RACameraOverlayView6 alloc] initWithCameraController:self];
 	}
 
 	[_imagePickerController setShowsCameraControls:NO];
@@ -265,15 +274,23 @@ RAFlashMode;
 {
 	[self setTintColor:[UIColor whiteColor]];
 	
-	if (self.bounds.size.height == 568.0)
+	CGFloat screenHeight = self.bounds.size.height;
+	
+	if (screenHeight == 568.0)
 	{
 		[self setCameraViewTransform:CGAffineTransformMakeTranslation(0.0, 60.0)];
 	}
-	
-	UIImageView *bottomBackground = [[UIImageView alloc] initWithFrame:CGRectMake(0.0, self.bounds.size.height-80.0, 320.0, 80.0)];
-	[bottomBackground setBackgroundColor:[UIColor colorWithWhite:0.0 alpha:0.2]];
+	else
+	{
+		UIView *topBackground = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, 320.0, 60.0)];
+		[topBackground setBackgroundColor:[UIColor colorWithWhite:0.0 alpha:0.3]];
+		[self addSubview:topBackground];
+	}
+
+	UIImageView *bottomBackground = [[UIImageView alloc] initWithFrame:CGRectMake(0.0, screenHeight-80.0, 320.0, 80.0)];
+	[bottomBackground setBackgroundColor:[UIColor colorWithWhite:0.0 alpha:0.3]];
 	[bottomBackground setContentMode:UIViewContentModeCenter];
-	[bottomBackground setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_shutter_bkg"]];
+	[bottomBackground setImage:[UIImage RAImageNamed:@"RACC_shutter_bkg"]];
 	[self addSubview:bottomBackground];
 	
 	_cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -281,29 +298,30 @@ RAFlashMode;
 	[_cancelButton setTitle:@"Cancel" forState:UIControlStateNormal];
 	[_cancelButton.titleLabel setFont:[UIFont systemFontOfSize:18.0]];
 	[_cancelButton addTarget:self.cameraController action:@selector(dismissCamera) forControlEvents:UIControlEventTouchUpInside];
-	[_cancelButton setCenter:CGPointMake(40.0, self.bounds.size.height-40.0)];
+	[_cancelButton setCenter:CGPointMake(40.0, screenHeight-40.0)];
 	[self addSubview:_cancelButton];
 	
 	_photoButton = [UIButton buttonWithType:UIButtonTypeSystem];
 	[_photoButton setFrame:CGRectMake(0.0, 0.0, 66.0, 66.0)];
-	[_photoButton setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_shutter"] forState:UIControlStateNormal];
+	[_photoButton setImage:[UIImage RAImageNamed:@"RACC_shutter"] forState:UIControlStateNormal];
 	[_photoButton addTarget:self.cameraController action:@selector(takePicture) forControlEvents:UIControlEventTouchUpInside];
-	[_photoButton setCenter:CGPointMake(160.0, self.bounds.size.height-40.0)];
+	[_photoButton setCenter:CGPointMake(160.0, screenHeight-40.0)];
 	[self addSubview:_photoButton];
 	
 	if ([UIImagePickerController isCameraDeviceAvailable:UIImagePickerControllerCameraDeviceFront])
 	{
 		_switchButton = [UIButton buttonWithType:UIButtonTypeSystem];
 		[_switchButton setFrame:CGRectMake(0.0, 0.0, 44.0, 44.0)];
-		[_switchButton setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_switch"] forState:UIControlStateNormal];
+		[_switchButton setImage:[UIImage RAImageNamed:@"RACC_switch"] forState:UIControlStateNormal];
 		[_switchButton addTarget:self action:@selector(switchCameraDevice) forControlEvents:UIControlEventTouchUpInside];
-		[_switchButton setCenter:CGPointMake(292.0, 22.0)];
+		[_switchButton setCenter:CGPointMake(292.0,27.0)];
 		[self addSubview:_switchButton];
 	}
 	
 	if ([UIImagePickerController isFlashAvailableForCameraDevice:UIImagePickerControllerCameraDeviceRear])
 	{
 		_flashView = [[RAFlashView alloc] initWithCameraOverlayView:self];
+		[_flashView setCenter:CGPointMake(40.0, 27.0)];
 		[self addSubview:_flashView];
 	}
 }
@@ -383,22 +401,24 @@ RAFlashMode;
 - (void)setup
 {
 	_screenHeight = [[UIScreen mainScreen] bounds].size.height;
-	_offset = (_screenHeight == 568 ? 100.0 : 54.0);
+	
+	BOOL isR4 = (_screenHeight == 568);
+	
+	_offset = (isR4 ? 96.0 : 54.0);
 	
 	_overlayView = [[UIView alloc] initWithFrame:CGRectMake(0.0, 0.0, _screenHeight - _offset, 320.0)];
 	[_overlayView setCenter:CGPointMake(160.0, (_screenHeight - _offset)/2)];
 	[self addSubview:_overlayView];
 
 	UIImageView *bottomBackground = [[UIImageView alloc] initWithFrame:CGRectMake(0.0, _screenHeight - _offset, 320.0, _offset)];
-	[bottomBackground setContentMode:UIViewContentModeTop];
 	[bottomBackground setBackgroundColor:[UIColor blackColor]];
-	[bottomBackground setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_bar"]];
+	[bottomBackground setImage:[UIImage RAImageNamed:(isR4?@"RACC_6_barR4":@"RACC_6_bar")]];
 	[self addSubview:bottomBackground];
 
 	if ([UIImagePickerController isCameraDeviceAvailable:UIImagePickerControllerCameraDeviceFront])
 	{
 		_switchButton = [UIButton buttonWithType:UIButtonTypeCustom];
-		[_switchButton setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_switch"] forState:UIControlStateNormal];
+		[_switchButton setImage:[UIImage RAImageNamed:@"RACC_6_switch"] forState:UIControlStateNormal];
 		[_switchButton addTarget:self action:@selector(switchCameraDevice) forControlEvents:UIControlEventTouchUpInside];
 		[_switchButton setFrame:CGRectMake(self.bounds.size.width - 90.0, 10.0, 80.0, 45.0)];
 		[_overlayView addSubview:_switchButton];
@@ -406,13 +426,13 @@ RAFlashMode;
 	
 	if ([UIImagePickerController isFlashAvailableForCameraDevice:UIImagePickerControllerCameraDeviceRear])
 	{
-		_flashImage[RAFlashModeAuto] = [UIImage imageNamed:@"RACameraController.bundle/RACC_6_flash_auto"];
-		_flashImage[RAFlashModeOn] = [UIImage imageNamed:@"RACameraController.bundle/RACC_6_flash_on"];
-		_flashImage[RAFlashModeOff] = [UIImage imageNamed:@"RACameraController.bundle/RACC_6_flash_off"];
+		_flashImage[RAFlashModeAuto] = [UIImage RAImageNamed:@"RACC_6_flash_auto"];
+		_flashImage[RAFlashModeOn] = [UIImage RAImageNamed:@"RACC_6_flash_on"];
+		_flashImage[RAFlashModeOff] = [UIImage RAImageNamed:@"RACC_6_flash_off"];
 		_flashMode= RAFlashModeAuto;
 		
 		_fImageView = [[UIImageView alloc] initWithImage:_flashImage[RAFlashModeAuto]];
-		[_fImageView setFrame:CGRectMake(10.0, 10.0, _flashImage[RAFlashModeAuto].size.width, _flashImage[RAFlashModeAuto].size.height)];
+		[_fImageView setFrame:(CGRect){{10.0, 10.0}, _flashImage[RAFlashModeAuto].size}];
 		[_overlayView addSubview:_fImageView];
 		
 		_flashButton = [UIButton buttonWithType:UIButtonTypeCustom];
@@ -424,23 +444,34 @@ RAFlashMode;
 	
 	UIButton *cameraButton = [UIButton buttonWithType:UIButtonTypeCustom];
 	[cameraButton addTarget:self.cameraController action:@selector(takePicture) forControlEvents:UIControlEventTouchUpInside];
-	[cameraButton setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_shutter_bkg"] forState:UIControlStateNormal];
-	[cameraButton setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_shutter_bkg_hl"] forState:UIControlStateHighlighted];
-	[cameraButton setFrame:CGRectMake(110.0, _screenHeight - _offset, 100.0, 54.0)];
+	if (isR4)
+	{
+		[cameraButton setImage:[UIImage RAImageNamed:@"RACC_6_shutter_bkgR4"] forState:UIControlStateNormal];
+		[cameraButton setImage:[UIImage RAImageNamed:@"RACC_6_shutter_bkg_hlR4"] forState:UIControlStateHighlighted];
+		[cameraButton setFrame:CGRectMake(0.0, 0.0, 75, 76)];
+	}
+	else
+	{
+		[cameraButton setImage:[UIImage RAImageNamed:@"RACC_6_shutter_bkg"] forState:UIControlStateNormal];
+		[cameraButton setImage:[UIImage RAImageNamed:@"RACC_6_shutter_bkg_hl"] forState:UIControlStateHighlighted];
+		[cameraButton setFrame:CGRectMake(0.0, 0.0, 100.0, 54.0)];
+	}
+	[cameraButton setCenter:CGPointMake(160.0, _screenHeight - _offset/2)];
 	[self addSubview:cameraButton];
 	
 	UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
 	[closeButton addTarget:self.cameraController action:@selector(dismissCamera) forControlEvents:UIControlEventTouchUpInside];
-	[closeButton setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_cancel_bkg"] forState:UIControlStateNormal];
-	[closeButton setImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_cancel_bkg_hl"] forState:UIControlStateHighlighted];
-	[closeButton setFrame:CGRectMake(0.0, _screenHeight - _offset, 54.0, 54.0)];
+	[closeButton setImage:[UIImage RAImageNamed:@"RACC_6_cancel_bkg"] forState:UIControlStateNormal];
+	[closeButton setImage:[UIImage RAImageNamed:@"RACC_6_cancel_bkg_hl"] forState:UIControlStateHighlighted];
+	[closeButton setFrame:CGRectMake(0.0, 0.0, 54.0, 54.0)];
+	[closeButton setCenter:CGPointMake(32.0, _screenHeight - _offset/2)];
 	[self addSubview:closeButton];
 	
-	_cImageView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_shutter"]];
+	_cImageView = [[UIImageView alloc] initWithImage:[UIImage RAImageNamed:(isR4?@"RACC_6_shutterR4":@"RACC_6_shutter")]];
 	[_cImageView setCenter:cameraButton.center];
 	[self addSubview:_cImageView];
 	
-	_xImageView = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_6_cancel"]];
+	_xImageView = [[UIImageView alloc] initWithImage:[UIImage RAImageNamed:@"RACC_6_cancel"]];
 	[_xImageView setCenter:closeButton.center];
 	[self addSubview:_xImageView];
 }
@@ -550,13 +581,13 @@ RAFlashMode;
 #pragma mark - RAFlashView -
 //--------------------------------------------------------------------------------------------------------------
 
-CGRect RAResizedFrameWithFactor(CGRect frame, CGFloat factor)
+static CGRect RAResizedFrameWithFactor(CGRect frame, CGFloat factor)
 {
 	CGSize fsize = CGSizeMake(frame.size.width*factor, frame.size.height*factor);
 	return CGRectMake(frame.origin.x - (fsize.width - frame.size.width)/2, frame.origin.y - (fsize.height - frame.size.height)/2, fsize.width, fsize.height);
 }
 
-RAFlashMode RAFlashModeFromLocation(CGPoint location)
+static RAFlashMode RAFlashModeFromLocation(CGPoint location)
 {
 	if (location.x > 105.0)
 	{
@@ -576,7 +607,7 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 {
 	UIImageView *_flashImage;
 	UILabel *_modeLabel[RAFlashModes];
-	CGAffineTransform _orientationTransform[RAFlashModes+1];
+	CGAffineTransform _orientationTransform;
 	
 	RAFlashMode _flashMode;
 	RAFlashMode _hlFlashMode;
@@ -597,8 +628,8 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 	{
 		_cameraOverlayView = cameraOverlayView;
 
-		_flashImage = [[UIImageView alloc] initWithImage:[UIImage imageNamed:@"RACameraController.bundle/RACC_flash"]];
-		[_flashImage setCenter:CGPointMake(16.0, 24.0)];
+		_flashImage = [[UIImageView alloc] initWithImage:[UIImage RAImageNamed:@"RACC_flash"]];
+		[_flashImage setCenter:CGPointMake(16.0, 23.0)];
 		[self addSubview:_flashImage];
 		_modeLabel[RAFlashModeOff] = [self modeLabelWithText:@"O f f"];
 		[_modeLabel[RAFlashModeOff] setAlpha:0.0];
@@ -609,17 +640,14 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 		_modeLabel[RAFlashModeAuto] = [self modeLabelWithText:@"A u t o"];
 		[self addSubview:_modeLabel[RAFlashModeAuto]];
 		
-		_orientationTransform[RAFlashModeAuto] = CGAffineTransformIdentity;
-		_orientationTransform[RAFlashModeOn] = CGAffineTransformIdentity;
-		_orientationTransform[RAFlashModeOff] = CGAffineTransformIdentity;
-		_orientationTransform[RAFlashModes] = CGAffineTransformIdentity;
+		_orientationTransform = CGAffineTransformIdentity;
 	}
     return self;
 }
 
 - (UILabel *)modeLabelWithText:(NSString *)text
 {
-	UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(28.0, 17.0, 50.0, 11.0)];
+	UILabel *label = [[UILabel alloc] initWithFrame:CGRectMake(28.0, 16.0, 50.0, 11.0)];
 //	[label setFont:[UIFont fontWithName:@"AvenirNextCondensed-DemiBold" size:11]];
 	[label setFont:[UIFont fontWithName:@"HelveticaNeue-CondensedBold" size:11]];
 	[label setBackgroundColor:[UIColor clearColor]];
@@ -656,15 +684,12 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 			break;
 	}
 	
-	_orientationTransform[RAFlashModeAuto] = CGAffineTransformMakeRotation(angle);
-	_orientationTransform[RAFlashModeOn] = CGAffineTransformMakeRotation(angle);
-	_orientationTransform[RAFlashModeOff] = CGAffineTransformMakeRotation(angle);
-	_orientationTransform[RAFlashModes] = CGAffineTransformMakeRotation(angle);
+	_orientationTransform = CGAffineTransformMakeRotation(angle);
 	
-	[_modeLabel[RAFlashModeAuto] setTransform:_orientationTransform[RAFlashModeAuto]];
-	[_modeLabel[RAFlashModeOn] setTransform:_orientationTransform[RAFlashModeOn]];
-	[_modeLabel[RAFlashModeOff] setTransform:_orientationTransform[RAFlashModeOff]];
-	[_flashImage setTransform:_orientationTransform[RAFlashModes]];
+	[_modeLabel[RAFlashModeAuto] setTransform:_orientationTransform];
+	[_modeLabel[RAFlashModeOn] setTransform:_orientationTransform];
+	[_modeLabel[RAFlashModeOff] setTransform:_orientationTransform];
+	[_flashImage setTransform:_orientationTransform];
 }
 
 - (void)setHighlighted:(BOOL)highlighted
@@ -795,9 +820,9 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 	[self setFrame:CGRectMake(0.0, 0.0, 160.0, 44.0)];
 	
 	CGAffineTransform tFlashModeOn = CGAffineTransformMakeTranslation(60.0, 0.0);
-	tFlashModeOn = CGAffineTransformConcat(_orientationTransform[RAFlashModeOn],tFlashModeOn);
+	tFlashModeOn = CGAffineTransformConcat(_orientationTransform,tFlashModeOn);
 	CGAffineTransform tFlashModeOff = CGAffineTransformMakeTranslation(105.0, 0.0);
-	tFlashModeOff = CGAffineTransformConcat(_orientationTransform[RAFlashModeOff],tFlashModeOff);
+	tFlashModeOff = CGAffineTransformConcat(_orientationTransform,tFlashModeOff);
 	
 	[UIView animateWithDuration:0.2
 					 animations:^{
@@ -824,8 +849,8 @@ RAFlashMode RAFlashModeFromLocation(CGPoint location)
 		{
 			[_modeLabel[fm] setAlpha:(fm == flashMode?1.0:0.0)];
 		}
-		[_modeLabel[RAFlashModeOn] setTransform:_orientationTransform[RAFlashModeOn]];
-		[_modeLabel[RAFlashModeOff] setTransform:_orientationTransform[RAFlashModeOff]];
+		[_modeLabel[RAFlashModeOn] setTransform:_orientationTransform];
+		[_modeLabel[RAFlashModeOff] setTransform:_orientationTransform];
 	}];
 }
 

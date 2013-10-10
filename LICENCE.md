@@ -1,6 +1,6 @@
 RACameraController
 
-Version 0.2, October 9th, 2013
+Version 0.3, October 10th, 2013
 
 Copyright (C) 2013 Nollie Apps
 
