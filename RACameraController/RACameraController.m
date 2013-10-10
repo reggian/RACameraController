@@ -109,7 +109,7 @@
 	
 	if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"7.0"))
 	{
-		cameraOverlayView = [[RACameraOverlayView6 alloc] initWithCameraController:self];
+		cameraOverlayView = [[RACameraOverlayView7 alloc] initWithCameraController:self];
 	}
 	else
 	{
