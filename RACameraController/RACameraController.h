@@ -54,6 +54,7 @@
 @property (nonatomic) CGAffineTransform cameraViewTransform;
 
 - (instancetype)initWithCameraController:(RACameraController *)controller;
+- (void)synchronise;
 
 @end
 
@@ -64,5 +65,6 @@
 - (instancetype)initWithCameraOverlayView:(RACameraOverlayView *)cameraOverlayView;
 
 - (void)setOrientation:(UIInterfaceOrientation)orientation;
+- (void)setFlashMode:(UIImagePickerControllerCameraFlashMode)flashMode;
 
 @end

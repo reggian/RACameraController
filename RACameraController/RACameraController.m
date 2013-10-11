@@ -35,6 +35,10 @@
 // http://stackoverflow.com/a/5337804
 #define SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(v)  ([[[UIDevice currentDevice] systemVersion] compare:v options:NSNumericSearch] != NSOrderedAscending)
 
+//--------------------------------------------------------------------------------------------------------------
+#pragma mark - RAExtensions -
+//--------------------------------------------------------------------------------------------------------------
+
 @implementation UIImage (RAExtension)
 
 + (UIImage *)RAImageNamed:(NSString *)name
@@ -43,10 +47,6 @@
 }
 
 @end
-
-//--------------------------------------------------------------------------------------------------------------
-#pragma mark - UIImagePickerController RAExtension -
-//--------------------------------------------------------------------------------------------------------------
 
 @implementation UIImagePickerController (RAExtension)
 - (BOOL)prefersStatusBarHidden
@@ -76,6 +76,7 @@
 @interface RACameraController ()
 @property (nonatomic, strong) UIImagePickerController *imagePickerController;
 @property (nonatomic, weak) UIViewController *rootViewController;
+@property (nonatomic, strong) RACameraOverlayView *cameraOverlayView;
 @end
 
 @implementation RACameraController
@@ -105,20 +106,18 @@
 
 - (void)setupCameraOverlay
 {
-	RACameraOverlayView *cameraOverlayView;
-	
 	if (SYSTEM_VERSION_GREATER_THAN_OR_EQUAL_TO(@"7.0"))
 	{
-		cameraOverlayView = [[RACameraOverlayView7 alloc] initWithCameraController:self];
+		self.cameraOverlayView = [[RACameraOverlayView7 alloc] initWithCameraController:self];
 	}
 	else
 	{
-		cameraOverlayView = [[RACameraOverlayView6 alloc] initWithCameraController:self];
+		self.cameraOverlayView = [[RACameraOverlayView6 alloc] initWithCameraController:self];
 	}
 
 	[_imagePickerController setShowsCameraControls:NO];
-	[_imagePickerController setCameraOverlayView:cameraOverlayView];
-	[_imagePickerController setCameraViewTransform:cameraOverlayView.cameraViewTransform];
+	[_imagePickerController setCameraOverlayView:_cameraOverlayView];
+	[_imagePickerController setCameraViewTransform:_cameraOverlayView.cameraViewTransform];
 }
 
 - (void)takePicture
@@ -161,6 +160,7 @@
 
 - (void)presentCameraAnimated:(BOOL)animated completion:(void (^)(void))completion
 {
+	[_cameraOverlayView synchronise];
 	[_rootViewController presentViewController:_imagePickerController animated:animated completion:completion];
 }
 
@@ -225,6 +225,8 @@ RAFlashMode;
 }
 
 - (void)setup{}
+
+- (void)synchronise{}
 
 - (void)deviceDidRotate:(NSNotification *)notification
 {
@@ -326,6 +328,13 @@ RAFlashMode;
 	}
 }
 
+- (void)synchronise
+{
+	[_flashView setFlashMode:self.cameraController.imagePickerController.cameraFlashMode];
+	UIImagePickerControllerCameraDevice device = self.cameraController.imagePickerController.cameraDevice;
+	[_flashView setAlpha:([UIImagePickerController isFlashAvailableForCameraDevice:device]?1.0:0.0)];
+}
+
 - (void)switchCameraDevice
 {
 	UIImagePickerControllerCameraDevice device;
@@ -383,6 +392,19 @@ RAFlashMode;
 //--------------------------------------------------------------------------------------------------------------
 #pragma mark - RACameraOverlayView6
 //--------------------------------------------------------------------------------------------------------------
+
+static RAFlashMode RAFlashModeFromUIImagePickerControllerCameraFlashMode(UIImagePickerControllerCameraFlashMode flashMode)
+{
+	switch (flashMode)
+	{
+		case UIImagePickerControllerCameraFlashModeAuto:
+			return RAFlashModeAuto;
+		case UIImagePickerControllerCameraFlashModeOn:
+			return RAFlashModeOn;
+		case UIImagePickerControllerCameraFlashModeOff:
+			return RAFlashModeOff;
+	}
+}
 
 @implementation RACameraOverlayView6
 {
@@ -447,7 +469,6 @@ RAFlashMode;
 	if (isR4)
 	{
 		[cameraButton setImage:[UIImage RAImageNamed:@"RACC_6_shutter_bkgR4"] forState:UIControlStateNormal];
-		[cameraButton setImage:[UIImage RAImageNamed:@"RACC_6_shutter_bkg_hlR4"] forState:UIControlStateHighlighted];
 		[cameraButton setFrame:CGRectMake(0.0, 0.0, 75, 76)];
 	}
 	else
@@ -461,8 +482,15 @@ RAFlashMode;
 	
 	UIButton *closeButton = [UIButton buttonWithType:UIButtonTypeCustom];
 	[closeButton addTarget:self.cameraController action:@selector(dismissCamera) forControlEvents:UIControlEventTouchUpInside];
-	[closeButton setImage:[UIImage RAImageNamed:@"RACC_6_cancel_bkg"] forState:UIControlStateNormal];
-	[closeButton setImage:[UIImage RAImageNamed:@"RACC_6_cancel_bkg_hl"] forState:UIControlStateHighlighted];
+	if (isR4)
+	{
+		[closeButton setImage:[UIImage RAImageNamed:@"RACC_6_cancel_bkgR4"] forState:UIControlStateNormal];
+	}
+	else
+	{
+		[closeButton setImage:[UIImage RAImageNamed:@"RACC_6_cancel_bkg"] forState:UIControlStateNormal];
+		[closeButton setImage:[UIImage RAImageNamed:@"RACC_6_cancel_bkg_hl"] forState:UIControlStateHighlighted];
+	}
 	[closeButton setFrame:CGRectMake(0.0, 0.0, 54.0, 54.0)];
 	[closeButton setCenter:CGPointMake(32.0, _screenHeight - _offset/2)];
 	[self addSubview:closeButton];
@@ -471,9 +499,20 @@ RAFlashMode;
 	[_cImageView setCenter:cameraButton.center];
 	[self addSubview:_cImageView];
 	
-	_xImageView = [[UIImageView alloc] initWithImage:[UIImage RAImageNamed:@"RACC_6_cancel"]];
+	_xImageView = [[UIImageView alloc] initWithImage:[UIImage RAImageNamed:(isR4?@"RACC_6_cancelR4":@"RACC_6_cancel")]];
 	[_xImageView setCenter:closeButton.center];
 	[self addSubview:_xImageView];
+}
+
+- (void)synchronise
+{
+	UIImagePickerControllerCameraDevice device			= self.cameraController.imagePickerController.cameraDevice;
+	UIImagePickerControllerCameraFlashMode flashMode	= self.cameraController.imagePickerController.cameraFlashMode;
+	
+	_flashMode = RAFlashModeFromUIImagePickerControllerCameraFlashMode(flashMode);
+	
+	[_fImageView setImage:_flashImage[_flashMode]];
+	[_fImageView setAlpha:([UIImagePickerController isFlashAvailableForCameraDevice:device]?1.0:0.0)];
 }
 
 - (void)switchCameraDevice
@@ -690,6 +729,15 @@ static RAFlashMode RAFlashModeFromLocation(CGPoint location)
 	[_modeLabel[RAFlashModeOn] setTransform:_orientationTransform];
 	[_modeLabel[RAFlashModeOff] setTransform:_orientationTransform];
 	[_flashImage setTransform:_orientationTransform];
+}
+
+- (void)setFlashMode:(UIImagePickerControllerCameraFlashMode)flashMode
+{
+	_flashMode = RAFlashModeFromUIImagePickerControllerCameraFlashMode(flashMode);
+	for (RAFlashMode fm = 0; fm < RAFlashModes; fm++)
+	{
+		[_modeLabel[fm] setAlpha:(fm==_flashMode?1.0:0.0)];
+	}
 }
 
 - (void)setHighlighted:(BOOL)highlighted
